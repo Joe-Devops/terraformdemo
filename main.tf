@@ -11,9 +11,7 @@ data "aws_ami" "amazon_linux" {
 
   filter {
     name = "description"
-    values = [
-      "Amazon Linux 2 Kernel 5.10 AMI 2.0.20221004.0 x86_64 HVM gp2",
-    ]
+    values = ["Amazon Linux 2 Kernel 5.10 AMI 2.0.20221004.0 x86_64 HVM gp2", ]
   }
 }
 
@@ -61,6 +59,8 @@ module "ec2-instance-private" {
   key_name               = "${var.ProjectName}Ec2Key"
   subnet_id              = module.vpc.private_subnets[0]
   monitoring             = true
+
+  vpc_security_group_ids = ["${module.sg-ec2-private.security_group_id}", ]
 }
 
 #Create an EC2 instance in a public subnet that can be used as a bastion host
@@ -75,4 +75,73 @@ module "ec2-instance-public" {
   key_name               = "${var.ProjectName}Ec2Key"
   subnet_id              = module.vpc.public_subnets[0]
   monitoring             = true
+  
+  vpc_security_group_ids = ["${module.sg-ec2-public.security_group_id}", ]
 }
+
+#Create the security groups that we will need for our various resources. 
+module "sg-ec2-public" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "4.16.0"
+
+  name                   = "${var.ProjectName}SgEc2Public"
+  description            = "Security group for publicly facing bastion host that allows inbound SSH traffic."
+  vpc_id                 = "${module.vpc.vpc_id}"
+
+  egress_rules           = ["all-all",]
+
+  ingress_cidr_blocks    = ["76.95.169.14/32"]
+  ingress_rules          = ["ssh-tcp"]
+}
+
+module "sg-ec2-private" {
+  source  = "terraform-aws-modules/security-group/aws"
+  version = "4.16.0"
+
+  vpc_id                 = "${module.vpc.vpc_id}"
+  name                   = "${var.ProjectName}SgEc2Private"
+  description            = "Security group for private Ec2 host that allows inbound SSH from public ec2 security group."
+
+  egress_rules           = ["all-all",]
+
+  number_of_computed_ingress_with_source_security_group_id = 1
+  computed_ingress_with_source_security_group_id = [
+    {
+      description              = "Allows SSH from the public subnet security group"
+      from_port                = 22
+      to_port                  = 22
+      protocol                 = "tcp"
+      source_security_group_id = "${module.sg-ec2-public.security_group_id}"
+    }
+  ]
+}
+
+module "sg-rds" {
+  source   = "terraform-aws-modules/security-group/aws"
+  version  = "4.16.0"
+  
+  vpc_id                 = "${module.vpc.vpc_id}"
+  name                   = "${var.ProjectName}SgRds"
+  description            = "Security group for postgres instances that allows inbound traffic from public ec2 security group." 
+  egress_rules           = ["all-all",]
+  
+  number_of_computed_ingress_with_source_security_group_id = 2
+  computed_ingress_with_source_security_group_id = [
+    {
+      description               = "Allows postgres traffic from the public subnet security group"
+      from_port                 = 5432
+      to_port                   = 5432
+      protocol                  = "tcp"
+      source_security_group_id  = "${module.sg-ec2-public.security_group_id}"
+    }
+    ,    
+    {
+      description               = "Allows postgres traffic from the private subnet security group"
+      from_port                 = 5432
+      to_port                   = 5432
+      protocol                  = "tcp"
+      source_security_group_id  = "${module.sg-ec2-private.security_group_id}"
+    }
+  ]
+}
+    
