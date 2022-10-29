@@ -79,6 +79,30 @@ module "ec2-instance-public" {
   vpc_security_group_ids = ["${module.sg-ec2-public.security_group_id}", ]
 }
 
+#Create the RDS instance in the database subnets. 
+module "rds-postgres" {
+  source  = "terraform-aws-modules/rds/aws"
+  version = "5.1.0"
+
+  identifier = "rds-postgres"
+
+  engine               = "postgres"
+  engine_version       = "13.7"
+  family               = "postgres13"
+  major_engine_version = "13"
+  multi_az             = false
+  instance_class       = "db.t4g.micro"
+  allocated_storage    = "20"
+
+  db_name  = "${var.ProjectName}"
+  username = "dbadmin"
+  port     = 5432
+
+  db_subnet_group_name   = module.vpc.database_subnet_group
+  vpc_security_group_ids = ["${module.sg-rds.security_group_id}",]
+  
+}
+
 #Create the security groups that we will need for our various resources. 
 module "sg-ec2-public" {
   source  = "terraform-aws-modules/security-group/aws"
@@ -144,4 +168,124 @@ module "sg-rds" {
     }
   ]
 }
-    
+
+###Create python lambda functions for stopping and starting the private ec2 instance and schedule them to stop at 6pm PT every day and start at 8AM PT every day. 
+ 
+#Zip the directories for upload to aws
+data "archive_file" "start-ec2-package" {
+  type             = "zip"
+  source_file      = "${path.module}/python/start-ec2-instance/start-ec2-instance.py"
+  output_file_mode = "0666"
+  output_path      = "${path.module}/artifacts/start-ec2-package.zip"
+}
+data "archive_file" "stop-ec2-package" {
+  type             = "zip"
+  source_file      = "${path.module}/python/stop-ec2-instance/stop-ec2-instance.py"
+  output_file_mode = "0666"
+  output_path      = "${path.module}/artifacts/stop-ec2-package.zip"
+}
+
+
+
+
+#Create the functions for stopping and starting. 
+module "lambda-ec2-stop" {
+  source  = "terraform-aws-modules/lambda/aws"
+  version = "4.2.1"
+  
+  function_name          = "${var.ProjectName}LambdaStop"
+  description            = "Stops an ec2 instance or instances"
+  handler                = "stop-ec2-instance.stopec2instance"
+  runtime                = "python3.8"
+  publish                = true
+  create_package         = false
+  local_existing_package = "${path.module}/artifacts/stop-ec2-package.zip"
+
+  environment_variables = {
+       InstanceId = module.ec2-instance-private.id
+  }
+  attach_policy_json = true
+  policy_json        = <<-EOT
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:stopinstances"
+                ],
+                "Resource": ["${module.ec2-instance-private.arn}"]
+            }
+        ]
+    }
+  EOT
+}
+module "lambda-ec2-start"{
+  source  = "terraform-aws-modules/lambda/aws"
+  version = "4.2.1"
+  
+  function_name          = "${var.ProjectName}LambdaStart"
+  description            = "Starts an ec2 instance or instances"
+  handler                = "start-ec2-instance.startec2instance"
+  runtime                = "python3.8"
+  publish                = true
+  create_package         = false
+  local_existing_package = "${path.module}/artifacts/start-ec2-package.zip"
+  
+  environment_variables = {
+      InstanceId = module.ec2-instance-private.id
+  }
+  attach_policy_json = true
+  policy_json        = <<-EOT
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:startinstances"
+                ],
+                "Resource": ["${module.ec2-instance-private.arn}"]
+            }
+        ]
+    }
+  EOT
+}
+
+resource "aws_cloudwatch_event_rule" "cw-event-start" {
+  name                = "${var.ProjectName}ScheduledStart"
+  description         = "Triggers a lambda to start an instance on a schedule"
+  schedule_expression = "cron(0 15 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "cw-event-target-start" {
+  rule = aws_cloudwatch_event_rule.cw-event-start.name
+  arn  = module.lambda-ec2-start.lambda_function_arn
+}
+
+resource "aws_lambda_permission" "cw-event-permission-start" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambda-ec2-start.lambda_function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.cw-event-start.arn
+}
+
+resource "aws_cloudwatch_event_rule" "cw-event-stop" {
+  name                = "${var.ProjectName}ScheduledStop"
+  description         = "Triggers a lambda to stop an instance on a schedule"
+  schedule_expression = "cron(0 1 * * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "cw-event-target-stop" {
+  rule = aws_cloudwatch_event_rule.cw-event-stop.name
+  arn  = module.lambda-ec2-stop.lambda_function_arn
+}
+
+resource "aws_lambda_permission" "cw-event-permission-stop" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action         = "lambda:InvokeFunction"
+  function_name  = module.lambda-ec2-stop.lambda_function_name
+  principal      = "events.amazonaws.com"
+  source_arn     = aws_cloudwatch_event_rule.cw-event-stop.arn
+}
