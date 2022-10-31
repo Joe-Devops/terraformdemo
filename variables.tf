@@ -18,4 +18,128 @@ variable "AwsRegion" {
   description  = "The AWS region that infrastruture will be deployed to." 
   default      = "us-west-2"
 }
-  
+
+###The following are VPC variables with default values. These can be updated if necessary. 
+
+variable "VpcCidr" {
+  type         = string
+  description  = "Defines the ipv4 network for the vpc you are creating."
+  default      = "10.42.0.0/16"
+}
+
+variable "VpcPrivateSubnetsCidr" {
+  type         = list(string)
+  description  = "Creates a private subnet for each defined cidr block listed."
+  default      = ["10.42.0.0/24", "10.42.1.0/24", "10.42.2.0/24"]
+}
+
+variable "VpcPublicSubnetsCidr" {
+  type         = list(string)
+  description  = "Creates a public subnet for each defined cidr block listed." 
+  default      = ["10.42.10.0/24", "10.42.11.0/24", "10.42.12.0/24"]
+}
+
+variable "VpcDatabaseSubnetsCidr" {
+  type         = list(string)
+  description  = "Creates a database subnet for each defined cidr block listed."
+  default      = ["10.42.20.0/24", "10.42.21.0/24", "10.42.22.0/24"]
+}
+
+variable "VpcEnableNatGateway" {
+  type         = bool
+  default      = true
+}
+#The count of elastic IPs provisioned in the following var needs to be increased to match the number of availability zones or the deployment will fail. 
+variable "VpcSingleNatGateway" {
+  type         = bool
+  default      = true
+}
+
+variable "VpcNatElasticCount" {
+  type         = string
+  description  = "Deploys this many elastic IPs to associate to NAT gateways." 
+  default      = "1"
+}
+
+###The following are variables related to the ec2 instances. These can be updated if necessary. 
+
+variable "AmiDescription" {
+  type        = list(string)
+  description = "Used to lookup the AMI that will be deployed as ec2 instances."
+  default     = ["Amazon Linux 2 Kernel 5.10 AMI 2.0.20221004.0 x86_64 HVM gp2", ]
+}
+
+variable "Ec2PublicType" {
+  type        = string
+  description = "The instance class that will be assigned to the public ec2 instance."
+  default     = "t2.micro"
+}
+
+variable "Ec2PublicMonitoring" {
+  type        = bool
+  default     = true
+}
+
+variable "Ec2PublicInboundSshCidr" {
+  type        = list(string)
+  default     = ["76.95.169.14/32",]
+}
+
+variable "Ec2PrivateType" {
+  type        = string
+  description = "The instance class that wll be assigned to the private ec2 instance."
+  default     = "t2.micro"
+}
+
+variable "Ec2PrivateMonitoring" {
+  type        = bool
+  default     = true
+}
+
+
+###The following are variables used for the RDS. These can be updated if necessary. 
+
+variable "RdsEngine" {
+  type        = string
+  default     = "postgres"
+}
+
+variable "RdsEngineVersion" {
+  type        = string
+  default     = "13.7"
+}
+
+variable "RdsFamily" {
+  type        = string
+  default     = "postgres13"
+}
+
+variable "RdsMajorEngineVersion" {
+  type        = string
+  default     = "13"
+}
+
+variable "RdsMultiAvailabilityZone" {
+  type        = bool
+  default     = false
+}
+
+variable "RdsInstanceClass" {
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "RdsAllocatedStorage" {
+  type        = string
+  default     = "20"
+}
+
+variable "RdsDatabaseAdminUsername" {
+  type        = string
+  default     = "dbadmin"
+}
+
+variable "RdsDatabasePort" {
+  type        = string
+  default     = "5432"
+}
