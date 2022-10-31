@@ -1,7 +1,9 @@
 ###Load everything required for the plan to proceeed. 
 #Load the AWS Provider and set its region.
 provider "aws" {
-  region = "us-west-2"
+  region = var.AwsRegion
+  access_key = var.AwsAccessKey
+  secret_key = var.AwsSecretKey
 }
 
 #Set a data source and filter to help pull the correct AMI ID later.  
@@ -187,7 +189,7 @@ module "lambda-ec2-stop" {
   function_name          = "${var.ProjectName}LambdaStop"
   description            = "Stops an ec2 instance or instances"
   handler                = "ec2-instance.stopec2instance"
-  runtime                = "python3.8"
+  runtime                = var.LambdaRuntime
   publish                = true
   create_package         = false
   local_existing_package = "${path.module}/artifacts/python-package.zip"
@@ -218,7 +220,7 @@ module "lambda-ec2-start"{
   function_name          = "${var.ProjectName}LambdaStart"
   description            = "Starts an ec2 instance or instances"
   handler                = "ec2-instance.startec2instance"
-  runtime                = "python3.8"
+  runtime                = var.LambdaRuntime
   publish                = true
   create_package         = false
   local_existing_package = "${path.module}/artifacts/python-package.zip"
@@ -243,40 +245,21 @@ module "lambda-ec2-start"{
   EOT
 }
 
-resource "aws_cloudwatch_event_rule" "cw-event-start" {
-  name                = "${var.ProjectName}ScheduledStart"
-  description         = "Triggers a lambda to start an instance on a schedule"
+module "EventStart" {
+  source = "./modules/SimpleEventTrigger"
+  project_name = var.ProjectName
+  action = "Start"
   schedule_expression = "cron(0 15 * * ? *)"
-}
-
-resource "aws_cloudwatch_event_target" "cw-event-target-start" {
-  rule = aws_cloudwatch_event_rule.cw-event-start.name
-  arn  = module.lambda-ec2-start.lambda_function_arn
-}
-
-resource "aws_lambda_permission" "cw-event-permission-start" {
-  statement_id  = "AllowExecutionFromCloudWatch"
-  action        = "lambda:InvokeFunction"
+  target_arn = module.lambda-ec2-start.lambda_function_arn
   function_name = module.lambda-ec2-start.lambda_function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.cw-event-start.arn
 }
 
-resource "aws_cloudwatch_event_rule" "cw-event-stop" {
-  name                = "${var.ProjectName}ScheduledStop"
-  description         = "Triggers a lambda to stop an instance on a schedule"
+module "EventStop" {
+  source = "./modules/SimpleEventTrigger"
+  project_name = var.ProjectName
+  action = "Stop"
   schedule_expression = "cron(0 1 * * ? *)"
+  target_arn = module.lambda-ec2-stop.lambda_function_arn
+  function_name = module.lambda-ec2-stop.lambda_function_name
 }
 
-resource "aws_cloudwatch_event_target" "cw-event-target-stop" {
-  rule = aws_cloudwatch_event_rule.cw-event-stop.name
-  arn  = module.lambda-ec2-stop.lambda_function_arn
-}
-
-resource "aws_lambda_permission" "cw-event-permission-stop" {
-  statement_id  = "AllowExecutionFromCloudWatch"
-  action         = "lambda:InvokeFunction"
-  function_name  = module.lambda-ec2-stop.lambda_function_name
-  principal      = "events.amazonaws.com"
-  source_arn     = aws_cloudwatch_event_rule.cw-event-stop.arn
-}

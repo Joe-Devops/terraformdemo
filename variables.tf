@@ -5,6 +5,16 @@ variable "KeyPairPublicKey" {
   description  = "Public Key that will be installed on the ec2 hosts."
 }
 
+variable "AwsAccessKey" {
+  type        = string
+  default     = null
+}
+
+variable "AwsSecretKey" {
+  type        = string
+  default     = null
+}
+
 ###The following are required variables with default values. These can be updated if necessary. 
 
 variable "ProjectName" {
@@ -19,7 +29,7 @@ variable "AwsRegion" {
   default      = "us-west-2"
 }
 
-###The following are VPC variables with default values. These can be updated if necessary. 
+#Vpc variables 
 
 variable "VpcCidr" {
   type         = string
@@ -49,7 +59,7 @@ variable "VpcEnableNatGateway" {
   type         = bool
   default      = true
 }
-#The count of elastic IPs provisioned in the following var needs to be increased to match the number of availability zones or the deployment will fail. 
+ 
 variable "VpcSingleNatGateway" {
   type         = bool
   default      = true
@@ -61,7 +71,7 @@ variable "VpcNatElasticCount" {
   default      = "1"
 }
 
-###The following are variables related to the ec2 instances. These can be updated if necessary. 
+#Ec2 Variables 
 
 variable "AmiDescription" {
   type        = list(string)
@@ -97,7 +107,7 @@ variable "Ec2PrivateMonitoring" {
 }
 
 
-###The following are variables used for the RDS. These can be updated if necessary. 
+#Rds variables 
 
 variable "RdsEngine" {
   type        = string
@@ -143,3 +153,11 @@ variable "RdsDatabasePort" {
   type        = string
   default     = "5432"
 }
+
+#Lambda variables
+
+variable "LambdaRuntime" {
+  type        = string
+  default     = "python3.8"
+}
+
