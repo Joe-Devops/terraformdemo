@@ -3,16 +3,19 @@
 variable "KeyPairPublicKey" {
   type         = string
   description  = "Public Key that will be installed on the ec2 hosts."
+  sensitive    = true
 }
 
 variable "AwsAccessKey" {
   type        = string
   default     = null
+  sensitive   = true
 }
 
 variable "AwsSecretKey" {
   type        = string
   default     = null
+  sensitive   = true
 }
 
 ###The following are required variables with default values. These can be updated if necessary. 
